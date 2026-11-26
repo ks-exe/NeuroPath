@@ -1,0 +1,165 @@
+# NEUROPATH CI (tasks 5.3 and 5.4; Requirements 3.6, 3.7, 6.7, 7.2).
+#
+# Runs on every push and pull request: lint, type check, tests (with a
+# PostgreSQL service), the Lab import check, the migration round-trip check,
+# and secret scanning.
+#
+# CI makes no Bedrock or AWS calls: no AWS credentials are configured, the
+# API uses its local adapters (recorded ModelClient stub), and there is no
+# deploy job. The infra job validates the AWS CDK app with typecheck and
+# synth only (placeholder context, no credentials); it never deploys (R3.6).
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API (lint, typecheck, test, checks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: neuropath
+          POSTGRES_PASSWORD: neuropath
+          POSTGRES_DB: neuropath
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U neuropath -d neuropath"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: local
+      # Throwaway credentials for the CI-only service container; not a secret.
+      TEST_POSTGRES_URL: postgresql+psycopg://neuropath:neuropath@localhost:5432/neuropath
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/pyproject.toml
+
+      - name: Install API
+        working-directory: apps/api
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: python scripts/dev.py api lint
+
+      - name: Type check
+        run: python scripts/dev.py api typecheck
+
+      - name: Test (includes the PostgreSQL round-trip test)
+        run: python scripts/dev.py api test
+
+      - name: Lab import check
+        run: python scripts/dev.py check lab-imports
+
+      - name: Docs check
+        run: python scripts/dev.py check docs
+
+      - name: Create a fresh database for the migration check
+        env:
+          PGPASSWORD: neuropath
+        run: psql -h localhost -U neuropath -d neuropath -c 'CREATE DATABASE migration_check'
+
+      - name: Migration round-trip check
+        run: >-
+          python scripts/dev.py check migrations
+          postgresql+psycopg://neuropath:neuropath@localhost:5432/migration_check
+
+  web:
+    name: Web (lint, typecheck, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install workspaces
+        run: npm ci
+
+      - name: Lint
+        run: python scripts/dev.py web lint
+
+      - name: Type check
+        run: python scripts/dev.py web typecheck
+
+      - name: Test
+        run: python scripts/dev.py web test
+
+      # next build downloads Google fonts (next/font/google); GitHub-hosted
+      # runners have network access.
+      - name: Build
+        run: python scripts/dev.py web build
+
+  infra:
+    name: Infra (CDK typecheck, synth; never deploys)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install workspaces
+        run: npm ci
+
+      - name: Type check
+        run: python scripts/dev.py infra typecheck
+
+      # Placeholder context only; no AWS credentials, no deploy.
+      - name: Synth
+        run: python scripts/dev.py infra synth
+
+  secrets:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.21.2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history
+
+      - name: Install gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" version
+
+      - name: Scan full git history
+        run: '"$RUNNER_TEMP/gitleaks" detect --source . --redact --verbose --exit-code 1'

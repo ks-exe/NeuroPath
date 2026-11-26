@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Palette variables, fonts and the reduced-motion rule are emitted by the
+ * shared preset in packages/design-tokens (R4.1-R4.6).
+ */
+@layer base {
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+}

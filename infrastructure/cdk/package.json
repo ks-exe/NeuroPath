@@ -1,0 +1,21 @@
+{
+  "name": "@neuropath/infrastructure",
+  "version": "0.0.0",
+  "private": true,
+  "description": "NeuroPath AWS CDK infrastructure skeleton. Synth only; deploying requires the Founder's written authorization (R3.6).",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "synth": "cdk synth --strict -c env=dev -c budgetLimitUsd=1 -c budgetAlertEmail=placeholder@example.invalid"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "aws-cdk": "^2.1000.0",
+    "cdk-nag": "^2.34.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
