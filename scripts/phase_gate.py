@@ -5,7 +5,7 @@ from recorded results only. Nothing is assumed: a result that was not
 recorded is reported as NOT RECORDED and fails the gate.
 
 Usage:
-    python scripts/phase_gate.py --phase 0 [--ci-status PATH]
+    python scripts/phase_gate.py --phase {0,1} [--ci-status PATH]
         [--database-url URL] [--report PATH]
 
 Inputs:
@@ -17,6 +17,15 @@ Inputs:
     deployments   docs/phase-reports/deployments.json: a list of deploy
                   records, each with an "authorization" reference to the
                   Founder's written authorization. Missing file = no deploys.
+    lighthouse    (phase 1) docs/phase-reports/lighthouse.json: recorded scores,
+                  e.g. {"scores": {"performance": 95, "accessibility": 100,
+                  "best-practices": 96, "seo": 100}, "url": "...",
+                  "recorded_at": "..."}. Lighthouse is never run by the gate.
+                  Missing file = NOT RECORDED.
+
+Phase 1 re-runs every Phase 0 check (R78.3) and adds the R78.6 checks: the
+public page render tests, the inquiry storage tests, a V1 tagline scan, the
+jsdom-level accessibility tests and the recorded Lighthouse scores.
 
 Exit code 0 only if every check passes. The Founder approval section of the
 report is left blank; the gate never fills it in.
@@ -27,6 +36,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 import tempfile
 from collections.abc import Callable
@@ -185,14 +195,135 @@ def check_deploy_authorization(ctx: Context) -> Result:
                   f"{len(records)} deploy record(s), all with a Founder authorization")
 
 
+# --------------------------------------------------------------------------
+# Phase 1 checks
+# --------------------------------------------------------------------------
+
+NPM = "npm.cmd" if sys.platform == "win32" else "npm"
+LIGHTHOUSE_FILE = REPORTS_DIR / "lighthouse.json"
+LIGHTHOUSE_CATEGORIES = ("performance", "accessibility", "best-practices", "seo")
+LIGHTHOUSE_MIN = 90  # R15.9
+V1_TAGLINE = "Engineering Intelligence. Enabling Growth."
+TAGLINE_SCAN_DIRS = ("apps/web/src", "apps/web/content")
+TAGLINE_SCAN_SUFFIXES = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".md", ".mdx", ".json", ".css"}
+SUBPROCESS_TIMEOUT_S = 600
+
+
+def _run_command(name: str, args: list[str], cwd: Path, what: str) -> Result:
+    """Run a test command; PASS only on exit code 0."""
+    try:
+        proc = subprocess.run(
+            args, check=False, cwd=cwd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=SUBPROCESS_TIMEOUT_S,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return Result(name, FAIL, f"{what}: could not run `{' '.join(args)}`: {exc}")
+    if proc.returncode == 0:
+        return Result(name, PASS, f"{what}: `{' '.join(args)}` exited 0")
+    tail = "\n".join((proc.stdout + proc.stderr).strip().splitlines()[-15:])
+    return Result(name, FAIL, f"{what}: `{' '.join(args)}` exited {proc.returncode}\n{tail}")
+
+
+def check_public_pages(ctx: Context) -> Result:
+    return _run_command(
+        "public-pages",
+        [NPM, "run", "test", "--", "src/pages-content.test.tsx"],
+        ctx.root / "apps" / "web",
+        "every public page renders with one h1 and no V1 tagline (pages-content.test.tsx)",
+    )
+
+
+def check_inquiry_storage(ctx: Context) -> Result:
+    return _run_command(
+        "inquiry-storage",
+        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-q",
+         "tests/test_public_inquiries.py", "tests/test_inquiries_service.py"],
+        ctx.root / "apps" / "api",
+        "a submission stores Lead, Project_Inquiry and Project",
+    )
+
+
+def check_accessibility(ctx: Context) -> Result:
+    return _run_command(
+        "accessibility",
+        [NPM, "run", "test", "--", "src/a11y.test.tsx", "src/a11y-contrast.test.ts"],
+        ctx.root / "apps" / "web",
+        "jsdom-level checks only (skip link, landmarks, text alternatives, token contrast); "
+        "no browser or axe run",
+    )
+
+
+def _is_test_file(path: Path) -> bool:
+    return ".test." in path.name or "__tests__" in path.parts
+
+
+def check_v1_tagline(ctx: Context) -> Result:
+    hits: list[str] = []
+    scanned = 0
+    for rel in TAGLINE_SCAN_DIRS:
+        base = ctx.root / rel
+        if not base.is_dir():
+            continue
+        for path in base.rglob("*"):
+            if not path.is_file() or path.suffix not in TAGLINE_SCAN_SUFFIXES:
+                continue
+            if _is_test_file(path):
+                continue
+            scanned += 1
+            if V1_TAGLINE in path.read_text(encoding="utf-8", errors="replace"):
+                hits.append(_rel(ctx, path))
+    if hits:
+        return Result("v1-tagline", FAIL, "V1 tagline found in: " + ", ".join(hits))
+    return Result("v1-tagline", PASS,
+                  f"{scanned} source files in {', '.join(TAGLINE_SCAN_DIRS)} "
+                  "(test files excluded) contain no V1 tagline")
+
+
+def check_lighthouse(ctx: Context) -> Result:
+    path = ctx.root / LIGHTHOUSE_FILE
+    if not path.is_file():
+        return Result("lighthouse", NOT_RECORDED,
+                      f"no recorded Lighthouse result at {LIGHTHOUSE_FILE.as_posix()}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return Result("lighthouse", FAIL, f"unreadable {LIGHTHOUSE_FILE.as_posix()}: {exc}")
+    scores = data.get("scores", data) if isinstance(data, dict) else None
+    if not isinstance(scores, dict):
+        return Result("lighthouse", FAIL, "Lighthouse file must be a JSON object with scores")
+    parts: list[str] = []
+    ok = True
+    for cat in LIGHTHOUSE_CATEGORIES:
+        value = scores.get(cat)
+        if not isinstance(value, int | float) or isinstance(value, bool):
+            parts.append(f"{cat}=missing")
+            ok = False
+            continue
+        parts.append(f"{cat}={value:g}")
+        ok = ok and value >= LIGHTHOUSE_MIN
+    detail = f"{', '.join(parts)} (minimum {LIGHTHOUSE_MIN} each, R15.9)"
+    return Result("lighthouse", PASS if ok else FAIL, detail, data)
+
+
+PHASE0_CHECKS: list[Check] = [
+    check_structure,
+    check_ci_status,
+    check_migrations_round_trip,
+    check_docs_set,
+    check_lab_isolation,
+    check_deploy_authorization,
+]
+
 PHASE_CHECKS: dict[int, list[Check]] = {
-    0: [
-        check_structure,
-        check_ci_status,
-        check_migrations_round_trip,
-        check_docs_set,
-        check_lab_isolation,
-        check_deploy_authorization,
+    0: PHASE0_CHECKS,
+    # R78.3: Phase 1 re-runs every Phase 0 check, then its own.
+    1: [
+        *PHASE0_CHECKS,
+        check_public_pages,
+        check_inquiry_storage,
+        check_v1_tagline,
+        check_accessibility,
+        check_lighthouse,
     ],
 }
 
@@ -209,12 +340,24 @@ PHASE_REQUIREMENTS: dict[int, dict[str, list[str]]] = {
         "R7": ["docs"],
         "R8": ["ci-status"],
     },
+    1: {
+        "R9": ["public-pages", "accessibility"],
+        "R10": ["public-pages", "v1-tagline"],
+        "R11": ["public-pages"],
+        "R12": ["public-pages"],
+        "R13": ["public-pages"],
+        "R14": ["inquiry-storage", "migrations"],
+        "R15": ["accessibility", "lighthouse"],
+    },
 }
 
 NEXT_PHASE_PLAN: dict[int, str] = {
     0: "Phase 1 (public website and inquiry intake): R9 to R15, tasks 10 to 16 in "
        "`.kiro/specs/neuropath-platform/tasks.md`. Starts only after the Founder "
        "approves this report (R78.2).",
+    1: "Phase 2 (Client Acquisition and Founder CRM): R16 to R30, tasks 17 "
+       "to 32 in `.kiro/specs/neuropath-platform/tasks.md`. Starts only after the "
+       "Founder approves this report (R78.2).",
 }
 
 

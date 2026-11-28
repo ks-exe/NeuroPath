@@ -113,6 +113,20 @@ class OutboxEmailSender:
         logger.info("Email written to outbox: to=%s subject=%s", message.to, message.subject)
 
 
+class LogNotificationChannel:
+    """Logs internal notifications. Nothing is delivered (R3.4).
+
+    Only the recipient and subject are logged; the body may carry submitted content.
+    """
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, str]] = []
+
+    def notify(self, user_id: str, subject: str, body: str) -> None:
+        self.sent.append((user_id, subject))
+        logger.info("Notification recorded: to=%s subject=%s", user_id, subject)
+
+
 class RecordedModelClient:
     """Returns recorded responses keyed by prompt; no Bedrock call is made.
 

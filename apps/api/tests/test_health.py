@@ -10,6 +10,10 @@ def test_health_returns_ok() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_only_health_route_is_registered() -> None:
+def test_registered_api_routes() -> None:
     paths = {r.path for r in create_app().routes if r.path.startswith("/api/")}  # type: ignore[attr-defined]
-    assert paths == {"/api/v1/health"}
+    assert paths == {
+        "/api/v1/health",
+        "/api/v1/public/inquiries",
+        "/api/v1/public/inquiries/submission-token",
+    }

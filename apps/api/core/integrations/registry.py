@@ -50,6 +50,11 @@ LOCAL_SUBSTITUTIONS: dict[str, tuple[str, str, str]] = {
         "Email provider (Appendix C)",
         "Writes to outbox file/log",
     ),
+    "NotificationChannel": (
+        "LogNotificationChannel",
+        "Internal notification channel (Appendix C)",
+        "Logs recipient and subject only; nothing is delivered",
+    ),
     "ModelClient": ("RecordedModelClient", "Amazon Bedrock", "Recorded responses; no Bedrock call"),
 }
 

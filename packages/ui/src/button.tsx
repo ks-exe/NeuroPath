@@ -8,8 +8,9 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         primary: "bg-primary text-primary-foreground hover:bg-brand-dark",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-accent",
-        outline: "border border-border bg-background text-foreground hover:bg-secondary",
+        // Dark text on accent is below 4.5:1, so the hover state inverts instead (R15.5).
+        secondary: "bg-secondary text-secondary-foreground hover:bg-brand-dark hover:text-primary-foreground",
+        outline: "border border-input bg-background text-foreground hover:bg-secondary",
         ghost: "text-foreground hover:bg-secondary",
       },
       size: {

@@ -5,3 +5,4 @@ export { Section, type SectionProps } from "./section";
 export { Heading, type HeadingProps } from "./heading";
 export { MonoLabel, type MonoLabelProps } from "./mono-label";
 export { Field, type FieldProps } from "./field";
+export { TextareaField, type TextareaFieldProps } from "./textarea";

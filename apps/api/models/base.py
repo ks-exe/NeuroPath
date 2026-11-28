@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, MetaData, Uuid, func
+from sqlalchemy import DateTime, ForeignKey, MetaData, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Deterministic constraint and index names keep Alembic revisions stable.
@@ -43,10 +43,19 @@ class TimestampMixin:
 
 
 class TenantOwned:
-    """Adds the indexed, non-null `organization_id` to tenant-owned tables.
+    """Adds the indexed, non-null `organization_id` FK to tenant-owned tables (R6.5)."""
 
-    The foreign key to `organizations.id` is added by the task that creates the
-    `organizations` table (the column type matches it).
-    """
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+
+class CreatedAtMixin:
+    """`created_at` only, for append-only tables (Appendix B.1 item 3)."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

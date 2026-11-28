@@ -11,15 +11,54 @@ export class ApiError extends Error {
   readonly code: string;
   readonly fields: Record<string, string> | null;
   readonly requestId: string | null;
+  /** Seconds from the Retry-After header (429), when present. */
+  readonly retryAfterSeconds: number | null;
 
-  constructor(status: number, body: ApiErrorBody) {
+  constructor(status: number, body: ApiErrorBody, retryAfterSeconds: number | null = null) {
     super(body.message);
     this.name = "ApiError";
     this.status = status;
     this.code = body.code;
     this.fields = body.fields;
     this.requestId = body.request_id;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+/**
+ * Normalizes the envelope `fields` value. The API sends a list of
+ * `{field, message}`; a plain map is accepted too. Returns null when empty.
+ */
+export function normalizeFieldErrors(value: unknown): Record<string, string> | null {
+  const out: Record<string, string> = {};
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (
+        typeof item === "object" &&
+        item !== null &&
+        typeof (item as { field?: unknown }).field === "string" &&
+        typeof (item as { message?: unknown }).message === "string"
+      ) {
+        const field = (item as { field: string }).field.replace(/^body\./, "");
+        if (!(field in out)) out[field] = (item as { message: string }).message;
+      }
+    }
+  } else if (typeof value === "object" && value !== null) {
+    for (const [k, v] of Object.entries(value)) {
+      if (typeof v === "string") out[k] = v;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/** Parses Retry-After as delta-seconds or an HTTP date. */
+export function parseRetryAfter(header: string | null, now: number = Date.now()): number | null {
+  if (header === null || header.trim() === "") return null;
+  const trimmed = header.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  const date = Date.parse(trimmed);
+  if (Number.isNaN(date)) return null;
+  return Math.max(0, Math.ceil((date - now) / 1000));
 }
 
 export interface ApiClientOptions {
@@ -105,7 +144,7 @@ export class ApiClient {
         ? {
             code: parsed.code,
             message: parsed.message,
-            fields: parsed.fields ?? null,
+            fields: normalizeFieldErrors(parsed.fields),
             request_id: parsed.request_id ?? null,
           }
         : {
@@ -114,7 +153,7 @@ export class ApiClient {
             fields: null,
             request_id: null,
           };
-      throw new ApiError(response.status, errBody);
+      throw new ApiError(response.status, errBody, parseRetryAfter(response.headers.get("Retry-After")));
     }
     return parsed as T;
   }

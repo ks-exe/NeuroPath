@@ -80,6 +80,18 @@ class Settings(BaseSettings):
     # Name of the secret holding sensitive values in deployed environments.
     secrets_backend: Literal["env", "aws"] | None = None
 
+    # Inquiry form limits (R14.3, R14.9). Short fields are single-line; long fields keep
+    # newlines and tabs.
+    inquiry_short_text_max_length: int = Field(default=200, ge=1)
+    inquiry_long_text_max_length: int = Field(default=5000, ge=1)
+    inquiry_problem_description_min_length: int = Field(default=20, ge=1)
+    # Internal recipients notified of each new Project_Inquiry (R14.12). Phase 1 has no
+    # users table, so these are notification-channel addresses, never the submitter.
+    inquiry_notification_recipients: list[str] = Field(default_factory=lambda: ["founder"])
+    # Anonymous submissions allowed per client IP per window (R14.7).
+    inquiry_rate_limit_max: int = Field(default=5, ge=1)
+    inquiry_rate_limit_window_seconds: int = Field(default=600, ge=1)
+
 
 def get_secrets_provider(settings: Settings) -> SecretsProvider:
     """Env variables locally, AWS Secrets Manager in deployed environments (R3.2)."""

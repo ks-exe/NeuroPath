@@ -83,7 +83,8 @@ const preset: Partial<Config> = {
         "--muted": hexToRgbChannels(c.secondary),
         "--muted-foreground": "75 71 71",
         "--border": hexToRgbChannels(c.secondary),
-        "--input": hexToRgbChannels(c.secondary),
+        // Form control borders need 3:1 against the background (WCAG 1.4.11, R15.5).
+        "--input": hexToRgbChannels(c.accent),
         "--ring": hexToRgbChannels(c.primary),
         "--radius": radius.DEFAULT,
       };

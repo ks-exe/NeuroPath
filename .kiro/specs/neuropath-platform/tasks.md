@@ -123,86 +123,86 @@ This plan turns `design.md` into incremental coding tasks, phase by phase (R78).
     - Confirms repository structure, CI status from the last run, migration round trip, the documentation set, and that no IaC deploy has run without a recorded Founder authorization; writes the phase report skeleton (delivered requirement IDs, test results, known issues, open assumptions, next phase plan) from recorded results only
     - _Requirements: 78.1, 78.4, 78.5_
 
-- [ ] 9. Checkpoint: Phase 0 gate
+- [x] 9. Checkpoint: Phase 0 gate
   - Ensure all tests pass, ask the user if questions arise.
   - The Phase 0 gate (R78.5) passes and the phase report is ready for Founder review; Phase 1 starts only after recorded Founder approval (R78.2).
 
 ### Phase 1: Public Company Website (R9 to R15)
 
-- [ ] 10. Build the public layout and content source
-  - [ ] 10.1 Create the structured content source
+- [x] 10. Build the public layout and content source
+  - [x] 10.1 Create the structured content source
     - Typed content files in `apps/web/content/`: service groups A to F with detail lists, projects (title, description, technologies, `verification`), Why NEUROPATH statements (`confirmed`), About statements, Insights articles (`published`), Solutions capabilities with availability status
     - Loader functions that return only verified projects, confirmed statements, and published articles
     - _Requirements: 11.1, 11.4, 11.5, 11.6, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 13.6_
-  - [ ]* 10.2 Write unit tests for the content loaders
+  - [x]* 10.2 Write unit tests for the content loaders
     - Unverified projects and unpublished articles are omitted; empty sources produce the "being prepared" and "forthcoming" states with no placeholder entries
     - _Requirements: 11.2, 11.3, 11.5, 13.6_
-  - [ ] 10.3 Implement the global header, navigation, and footer
+  - [x] 10.3 Implement the global header, navigation, and footer
     - Links Home, Services, Solutions, Projects, How We Work, About, Insights, Contact; header CTA "Start a Project" to the inquiry form; Sign In link behind an `authEnabled` flag (off in Phase 1); menu control below 768 px; `aria-current="page"`; footer with all destinations and "Technology. Engineered to Solve."; no authentication on public routes
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7_
-  - [ ]* 10.4 Write component tests for navigation
+  - [x]* 10.4 Write component tests for navigation
     - Menu toggle below 768 px, `aria-current` on the active item, Sign In hidden when the flag is off
     - _Requirements: 9.3, 9.4, 9.5_
 
-- [ ] 11. Implement the public pages
-  - [ ] 11.1 Implement the homepage
+- [x] 11. Implement the public pages
+  - [x] 11.1 Implement the homepage
     - Sections in order: Hero, What We Solve, Engineering Capabilities, Industries and Business Use Cases, Selected Projects and Case Studies, How We Work, Why NEUROPATH, Final Project Inquiry CTA; Hero heading, tagline, and both CTAs with their targets; journey steps in the required order; Playground and Solution Architect shown only as supporting capabilities outside the Hero
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 10.10, 11.1, 11.3_
-  - [ ] 11.2 Implement the Services page and service details
+  - [x] 11.2 Implement the Services page and service details
     - Six groups with detail content (engagements, deliverables, technologies), feasibility statement, scraping compliance statement for groups B and E, "Start a Project" passing the group as an optional `serviceHint` query parameter
     - _Requirements: 12.1, 12.8, 12.9, 12.10, 12.11_
-  - [ ] 11.3 Implement Solutions, Projects, How We Work, About, Insights, and the 404 page
+  - [x] 11.3 Implement Solutions, Projects, How We Work, About, Insights, and the 404 page
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7_
-  - [ ]* 11.4 Write unit tests for page content rules
+  - [x]* 11.4 Write unit tests for page content rules
     - Homepage section order; no page contains "Engineering Intelligence. Enabling Growth."; unknown routes render the styled 404 with navigation
     - _Requirements: 10.1, 10.11, 13.7_
 
-- [ ] 12. Implement the API foundation and public inquiry intake
-  - [ ] 12.1 Add the error envelope, request id, and structured logging
+- [x] 12. Implement the API foundation and public inquiry intake
+  - [x] 12.1 Add the error envelope, request id, and structured logging
     - Middleware assigning a request id; JSON logs carrying it; exception handlers returning `{code, message, fields, request_id}`; router mounted under `/api/v1`
     - _Requirements: 19.3, 19.4_
-  - [ ] 12.2 Create the Phase 1 models and migration
+  - [x] 12.2 Create the Phase 1 models and migration
     - Tables `organizations` (internal seed row), `leads` (normalized email, unique index), `consent_records` (text version, timestamp, AI-processing flag), `project_inquiries` (submission token unique), `projects` (status, one-to-one FK unique on `project_inquiry_id`), `audit_logs`; tenant-owned tables carry `organization_id` (Appendix B.3 Phase 1)
     - _Requirements: 6.1, 6.3, 6.4, 6.5, 14.10, 24.1_
-  - [ ] 12.3 Implement the AuditService write path
+  - [x] 12.3 Implement the AuditService write path
     - `AuditService.record` writes inside the caller's transaction with actor type, actor id, action, resource, Organization, timestamp, request id, and redacted metadata; an audit write failure rolls back the whole transaction and returns HTTP 500 with the envelope
     - Repository exposes insert and read only; a PostgreSQL trigger rejects UPDATE and DELETE on `audit_logs`
     - Wire the transition engine audit hook to this service
     - _Requirements: 6.9, 8.4, 30.1, 30.3, 30.4, 30.5_
-  - [ ] 12.4 Implement email normalization and Lead upsert
+  - [x] 12.4 Implement email normalization and Lead upsert
     - `normalize_email` (trim, lowercase); `LeadService.upsert_from_inquiry` creates or links a Lead and stores the consent record
     - _Requirements: 22.1, 22.4, 22.7_
-  - [ ]* 12.5 Write property test for email normalization
+  - [x]* 12.5 Write property test for email normalization
     - **Property 16: Email normalization idempotence**
     - **Validates: Requirements 22.10**
-  - [ ] 12.6 Implement `InquiryService.submit` and the public endpoints
+  - [x] 12.6 Implement `InquiryService.submit` and the public endpoints
     - `POST /public/inquiries/submission-token` and `POST /public/inquiries`; Pydantic validation (name, email syntax, problem ≥ 20 chars, title, consent); honeypot rejection; text sanitization and configured max lengths; in-memory per-IP limit of 5 per 10 minutes returning 429 with `Retry-After`
     - One transaction stores Lead, Project_Inquiry, Project in Submitted (transition T01), and the Audit_Log entry; a repeated token returns the original receipt without new records
     - Notify internal users through the `NotificationChannel` local implementation only; no email to the submitter
     - _Requirements: 14.3, 14.7, 14.8, 14.9, 14.10, 14.11, 14.12, 14.14, 24.1_
-  - [ ]* 12.7 Write property test for idempotent submission
+  - [x]* 12.7 Write property test for idempotent submission
     - **Property 15: Idempotent inquiry submission**
     - Deliver each generated submission 1 to 5 times with the same token; assert one Project_Inquiry and one Project
     - **Validates: Requirements 14.14**
-  - [ ]* 12.8 Write property test for one Project per inquiry
+  - [x]* 12.8 Write property test for one Project per inquiry
     - **Property 8: One Project per inquiry**
     - **Validates: Requirements 24.15**
-  - [ ]* 12.9 Write unit tests for intake protections
+  - [x]* 12.9 Write unit tests for intake protections
     - Honeypot, rate limit and `Retry-After`, sanitization, length limits, consent fields stored, audit rollback on forced audit failure
     - _Requirements: 14.7, 14.8, 14.9, 14.10, 30.5_
 
-- [ ] 13. Implement the project inquiry form
-  - [ ] 13.1 Build the inquiry form page
+- [x] 13. Implement the project inquiry form
+  - [x] 13.1 Build the inquiry form page
     - All R14.1 fields with visible labels; no required technology category; optional service hint prefilled from `serviceHint` and clearable; field-level client validation; on API error show the error and keep values; on success show confirmation and clear; disabled submit and loading state while pending; errors announced through a live region; hidden honeypot field
     - _Requirements: 12.11, 14.1, 14.2, 14.4, 14.5, 14.6, 14.13, 15.7, 15.8_
-  - [ ]* 13.2 Write component tests for the inquiry form
+  - [x]* 13.2 Write component tests for the inquiry form
     - _Requirements: 14.4, 14.5, 14.6, 14.13_
 
-- [ ] 14. Implement SEO, accessibility, and performance requirements
-  - [ ] 14.1 Add metadata, sitemap, and robots
+- [x] 14. Implement SEO, accessibility, and performance requirements
+  - [x] 14.1 Add metadata, sitemap, and robots
     - Per-page unique title, description, canonical URL, Open Graph via the Next.js metadata API; `sitemap.ts` and `robots.ts`; one `h1` per page; per-route font and script loading
     - _Requirements: 15.1, 15.2, 15.3, 15.10_
-  - [ ] 14.2 Apply accessibility rules across public pages
+  - [x] 14.2 Apply accessibility rules across public pages
     - Text alternatives, WCAG 2.2 AA contrast for text, controls, and focus indicators, full keyboard operation
     - _Requirements: 15.4, 15.5, 15.6_
   - [ ]* 14.3 Write Playwright accessibility and layout tests
@@ -212,8 +212,8 @@ This plan turns `design.md` into incremental coding tasks, phase by phase (R78).
     - Mobile profile on a production build with thresholds of 90 for Performance, Accessibility, Best Practices, and SEO
     - _Requirements: 15.9_
 
-- [ ] 15. Implement the Phase 1 gate check
-  - [ ] 15.1 Extend `phase_gate.py` with `--phase 1` and update affected docs
+- [x] 15. Implement the Phase 1 gate check
+  - [x] 15.1 Extend `phase_gate.py` with `--phase 1` and update affected docs
     - Confirms all public pages render, a form submission stores Lead, Project_Inquiry, and Project, Lighthouse and accessibility results pass, and no page shows the V1 tagline; update `DATABASE.md`, `TESTING.md`, `ENVIRONMENT.md`, `IMPLEMENTATION_STATUS.md` in the same change set
     - _Requirements: 5.4, 5.5, 78.1, 78.3, 78.6_
 
